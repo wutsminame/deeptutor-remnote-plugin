@@ -1,0 +1,65 @@
+name: Patch CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  deeptutor-remnote-patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Enforce patch-only repository boundary
+        run: |
+          test "$(cat PATCH_BASE)" = "897fce52f24bf22e6e50d8a3e4df532632a26322"
+          test "$(grep -c '^diff --git ' patches/deeptutor-remnote.patch)" = "26"
+          for forbidden in plugin server deploy schema; do
+            test ! -e "$forbidden"
+          done
+          test -z "$(find . -path ./.git -prune -o -type f \( -name '.env' -o -name 'credentials.json' -o -name 'embedding.json' -o -name '*.sqlite' -o -name '*.sqlite3' -o -name '*-wal' -o -name '*-shm' \) -print)"
+      - name: Check out exact DeepTutor baseline
+        run: |
+          git clone --filter=blob:none https://github.com/HKUDS/DeepTutor.git /tmp/DeepTutor
+          git -C /tmp/DeepTutor checkout "$(cat PATCH_BASE)"
+      - name: Apply and compile patch
+        run: |
+          git -C /tmp/DeepTutor apply --check "$GITHUB_WORKSPACE/patches/deeptutor-remnote.patch"
+          git -C /tmp/DeepTutor apply "$GITHUB_WORKSPACE/patches/deeptutor-remnote.patch"
+          python -m compileall -q /tmp/DeepTutor/deeptutor/capabilities/remnote /tmp/DeepTutor/deeptutor/api/routers/knowledge.py
+          git -C /tmp/DeepTutor diff --check
+      - name: Install DeepTutor test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r /tmp/DeepTutor/requirements/server.txt pytest pytest-asyncio
+      - name: Create minimal credential-free runtime config
+        run: |
+          mkdir -p /tmp/DeepTutor/data/user/settings
+          cat > /tmp/DeepTutor/data/user/settings/main.yaml <<'YAML'
+          system:
+            language: en
+          logging:
+            level: WARNING
+          YAML
+      - name: Run RemNote backend regressions
+        working-directory: /tmp/DeepTutor
+        env:
+          DEEPTUTOR_HOME: /tmp/DeepTutor
+          PYTHONPATH: /tmp/DeepTutor
+        run: >-
+          python -m pytest -p no:cacheprovider
+          "$GITHUB_WORKSPACE/tests/test_integration.py"
+          tests/api/test_knowledge_router.py -q
+      - name: Install DeepTutor web dependencies
+        working-directory: /tmp/DeepTutor/web
+        run: npm ci --legacy-peer-deps
+      - name: Run DeepTutor web regressions
+        working-directory: /tmp/DeepTutor/web
+        run: |
+          npm run typecheck
+          npm run test:node

@@ -1,0 +1,12 @@
+DeepTutor RemNote Patch
+Copyright 2026 wutsminame and contributors
+
+Licensed under the Apache License, Version 2.0.
+
+This repository distributes modifications to HKUDS/DeepTutor at the exact
+baseline recorded in PATCH_BASE. The upstream license and third-party notices
+are preserved under upstream/. This is not an upstream DeepTutor release and
+does not imply endorsement by HKUDS or its contributors.
+
+No RemNote desktop plugin, RemNote sync service, production credentials, or
+user note data is distributed by this repository.

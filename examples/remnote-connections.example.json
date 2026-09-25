@@ -1,0 +1,6 @@
+{
+  "personal-remnote": {
+    "url": "https://notes.example.com",
+    "read_token": "<server-owned-read-token>"
+  }
+}
